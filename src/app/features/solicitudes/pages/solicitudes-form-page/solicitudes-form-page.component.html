@@ -3,18 +3,6 @@
     Editar Solicitud
   </h1>
 
-  <div *ngIf="mensajeError" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
-    role="alert">
-    <strong class="font-bold">Error:</strong>
-    <span class="block sm:inline">{{ mensajeError }}</span>
-  </div>
-  <div *ngIf="mensajeExito" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4"
-    role="alert">
-    <strong class="font-bold">Éxito:</strong>
-    <span class="block sm:inline">{{ mensajeExito }}</span>
-  </div>
-
-  <!-- Indicador visual del estado de edición -->
   <div *ngIf="!canUpdateSolicitud" class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mb-4">
     <strong class="font-bold">⚠️ Modo Solo Lectura:</strong>
     <span class="block sm:inline">Esta solicitud no se puede editar porque no tiene servicios pendientes.</span>
@@ -72,7 +60,6 @@
 
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-lg font-semibold">Servicios Solicitados</h2>
-      <!-- Solo mostrar botón agregar si se puede modificar -->
       <button type="button" (click)="agregarServicio()"
         *ngIf="canModifyServices"
         class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
@@ -87,7 +74,6 @@
 
         <div class="flex justify-between items-center mb-3">
           <h3 class="font-bold text-md">Servicio #{{ i + 1 }}</h3>
-          <!-- Solo mostrar botón eliminar si se puede modificar y hay más de un servicio -->
           <button type="button" (click)="eliminarServicio(i)"
             *ngIf="canModifyServices && servicios.length > 1"
             class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm">
@@ -146,7 +132,6 @@
       </div>
     </div>
 
-    <!-- Mensaje si no hay servicios o están vacíos -->
     <div *ngIf="servicios.length === 0" class="text-center py-8 text-gray-500">
       No hay servicios cargados...
     </div>
@@ -174,7 +159,6 @@
     </div>
   </form>
 
-  <!-- Debug info (remove in production) -->
   <div class="mt-4 p-4 bg-gray-100 rounded text-sm" *ngIf="false">
     <strong>Debug Info:</strong><br>
     canUpdateSolicitud: {{ canUpdateSolicitud }}<br>

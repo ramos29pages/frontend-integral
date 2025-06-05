@@ -14,6 +14,7 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { tap, finalize } from 'rxjs/operators';
+import Swal from 'sweetalert2'; // Import SweetAlert2
 
 @Component({
   selector: 'app-solicitud-form-page',
@@ -29,8 +30,8 @@ export class SolicitudFormPageComponent implements OnInit {
   estadosSolicitud = ['Abierta', 'En Proceso', 'Cerrada', 'Cancelada'];
   estadosServicio = ['Pendiente', 'Aprobado', 'Rechazado', 'Vencido'];
 
-  mensajeError: string | null = null;
-  mensajeExito: string | null = null;
+  // mensajeError: string | null = null; // No longer needed with SweetAlert2
+  // mensajeExito: string | null = null; // No longer needed with SweetAlert2
 
   // Control de actualización basado en lógica de negocio
   canUpdateSolicitud: boolean = false;
@@ -56,7 +57,11 @@ export class SolicitudFormPageComponent implements OnInit {
       this.cargarSolicitud();
     } else {
       // REDIRIGIR si no hay ID - solo permitimos edición
-      this.mostrarMensajeError('Esta página solo permite editar solicitudes existentes.');
+      this.mostrarAlerta(
+        'error',
+        'Error de Navegación',
+        'Esta página solo permite editar solicitudes existentes.'
+      );
       setTimeout(() => this.router.navigate(['/solicitudes']), 2000);
     }
   }
@@ -104,15 +109,18 @@ export class SolicitudFormPageComponent implements OnInit {
         Validators.required,
       ],
       comentarios: [servicio?.comentarios || ''],
-      // AGREGAR el campo costo_estimado que falta
-      costo_estimado: [servicio?.costo_estimado || 0, [Validators.min(0)]]
+      costo_estimado: [servicio?.costo_estimado || 0, [Validators.min(0)]],
     });
   }
 
   agregarServicio(servicio?: Servicio): void {
     // Solo permitir agregar servicios si se puede modificar
     if (!this.canModifyServices) {
-      this.mostrarMensajeError('No se pueden agregar servicios. La solicitud no tiene servicios pendientes.');
+      this.mostrarAlerta(
+        'warning',
+        'Acción Restringida',
+        'No se pueden agregar servicios. La solicitud no tiene servicios pendientes.'
+      );
       return;
     }
 
@@ -128,7 +136,11 @@ export class SolicitudFormPageComponent implements OnInit {
   eliminarServicio(index: number): void {
     // Solo permitir eliminar servicios si se puede modificar
     if (!this.canModifyServices) {
-      this.mostrarMensajeError('No se pueden eliminar servicios. La solicitud no tiene servicios pendientes.');
+      this.mostrarAlerta(
+        'warning',
+        'Acción Restringida',
+        'No se pueden eliminar servicios. La solicitud no tiene servicios pendientes.'
+      );
       return;
     }
 
@@ -136,8 +148,10 @@ export class SolicitudFormPageComponent implements OnInit {
     const servicioId = servicioControl.get('id_servicio')?.value;
 
     if (servicioId) {
-      this.mostrarMensajeConfirmacion(
-        '¿Estás seguro de que deseas eliminar este servicio?',
+      this.mostrarConfirmacion(
+        '¿Estás seguro?',
+        'Deseas eliminar este servicio de forma permanente?',
+        'warning',
         () => {
           this.cargando = true;
           this.solicitudService
@@ -151,11 +165,19 @@ export class SolicitudFormPageComponent implements OnInit {
             .subscribe({
               next: () => {
                 this.servicios.removeAt(index);
-                this.mostrarMensajeExito('Servicio eliminado con éxito.');
+                this.mostrarAlerta(
+                  'success',
+                  'Éxito',
+                  'Servicio eliminado con éxito.'
+                );
               },
               error: (err: any) => {
                 console.error('Error al eliminar servicio:', err);
-                this.mostrarMensajeError('Error al eliminar el servicio.');
+                this.mostrarAlerta(
+                  'error',
+                  'Error al eliminar',
+                  err.error?.details || err.error?.message || 'Error al eliminar el servicio.'
+                );
               },
             });
         }
@@ -164,8 +186,17 @@ export class SolicitudFormPageComponent implements OnInit {
       if (this.servicios.length > 1) {
         this.servicios.removeAt(index);
         this.actualizarEstadoFormulario();
+        this.mostrarAlerta(
+            'info',
+            'Servicio Removido',
+            'Servicio temporalmente removido. Guarda para aplicar cambios.'
+          );
       } else {
-        this.mostrarMensajeError('Una solicitud debe tener al menos un servicio.');
+        this.mostrarAlerta(
+          'warning',
+          'Advertencia',
+          'Una solicitud debe tener al menos un servicio.'
+        );
       }
     }
   }
@@ -186,9 +217,7 @@ export class SolicitudFormPageComponent implements OnInit {
     this.cargando = true;
     this.solicitudService
       .getSolicitudById(this.solicitudId)
-      .pipe(
-        finalize(() => (this.cargando = false))
-      )
+      .pipe(finalize(() => (this.cargando = false)))
       .subscribe({
         next: (solicitud: Solicitud) => {
           console.log('Solicitud cargada:', solicitud);
@@ -227,13 +256,16 @@ export class SolicitudFormPageComponent implements OnInit {
               // Crear FormGroup directamente
               const servicioFormGroup = this.crearServicioFormGroup({
                 ...servicio,
-                fecha_reunion: fechaValida
+                fecha_reunion: fechaValida,
               });
 
               this.servicios.push(servicioFormGroup);
             });
 
-            console.log('FormArray servicios después de cargar:', this.servicios.controls);
+            console.log(
+              'FormArray servicios después de cargar:',
+              this.servicios.controls
+            );
           } else {
             console.log('No hay servicios para cargar');
           }
@@ -243,7 +275,11 @@ export class SolicitudFormPageComponent implements OnInit {
         },
         error: (err: any) => {
           console.error('Error al cargar la solicitud:', err);
-          this.mostrarMensajeError('Error al cargar la solicitud. Redirigiendo...');
+          this.mostrarAlerta(
+            'error',
+            'Error de Carga',
+            err.error?.details || err.error?.message || 'Error al cargar la solicitud. Redirigiendo...'
+          );
           setTimeout(() => this.router.navigate(['/solicitudes']), 2000);
         },
       });
@@ -282,7 +318,9 @@ export class SolicitudFormPageComponent implements OnInit {
       this.canUpdateSolicitud = false;
       this.canModifyServices = false;
 
-      this.mostrarMensajeError(
+      this.mostrarAlerta(
+        'info',
+        'Modo Solo Lectura',
         'Esta solicitud no puede ser modificada porque no tiene servicios en estado "Pendiente".'
       );
     } else {
@@ -303,8 +341,6 @@ export class SolicitudFormPageComponent implements OnInit {
       // Controles de estado
       this.canUpdateSolicitud = true;
       this.canModifyServices = true;
-
-      this.mensajeError = null; // Limpiar mensaje de error
     }
 
     console.log('canUpdateSolicitud:', this.canUpdateSolicitud);
@@ -313,12 +349,11 @@ export class SolicitudFormPageComponent implements OnInit {
   }
 
   guardar(): void {
-    this.mensajeError = null;
-    this.mensajeExito = null;
-
     // Verificar lógica de negocio ANTES de validar formulario
     if (!this.canUpdateSolicitud) {
-      this.mostrarMensajeError(
+      this.mostrarAlerta(
+        'warning',
+        'Actualización No Permitida',
         'No se puede actualizar la solicitud porque no tiene servicios en estado "Pendiente".'
       );
       return;
@@ -327,7 +362,11 @@ export class SolicitudFormPageComponent implements OnInit {
     // Validar formulario
     if (this.solicitudForm.invalid) {
       this.solicitudForm.markAllAsTouched();
-      this.mostrarMensajeError('Por favor, corrige los errores del formulario.');
+      this.mostrarAlerta(
+        'error',
+        'Errores en el Formulario',
+        'Por favor, corrige los errores del formulario antes de guardar.'
+      );
       return;
     }
 
@@ -338,16 +377,18 @@ export class SolicitudFormPageComponent implements OnInit {
 
     this.solicitudService
       .updateSolicitud(this.solicitudId, solicitudUpdatePayload)
-      .pipe(
-        finalize(() => (this.cargando = false))
-      )
+      .pipe(finalize(() => (this.cargando = false)))
       .subscribe({
         next: () => {
           this.manejarActualizacionServicios();
         },
         error: (err: any) => {
           console.error('Error al actualizar la solicitud principal:', err);
-          this.mostrarMensajeError('Error al actualizar la solicitud principal.');
+          this.mostrarAlerta(
+            'error',
+            'Error de Actualización',
+            err.error?.details || err.error?.message || 'Error al actualizar la solicitud principal.'
+          );
         },
       });
   }
@@ -364,7 +405,10 @@ export class SolicitudFormPageComponent implements OnInit {
       } else {
         if (this.solicitudId) {
           observables.push(
-            this.solicitudService.addServiceToSolicitud(this.solicitudId, servicio)
+            this.solicitudService.addServiceToSolicitud(
+              this.solicitudId,
+              servicio
+            )
           );
         }
       }
@@ -373,6 +417,7 @@ export class SolicitudFormPageComponent implements OnInit {
     if (observables.length > 0) {
       let completedOperations = 0;
       let hasError = false;
+      let errorMessage = '';
 
       observables.forEach((obs) => {
         obs
@@ -382,8 +427,18 @@ export class SolicitudFormPageComponent implements OnInit {
               if (completedOperations === observables.length) {
                 this.cargando = false;
                 if (!hasError) {
-                  this.mostrarMensajeExito('Solicitud y servicios actualizados con éxito.');
+                  this.mostrarAlerta(
+                    'success',
+                    '¡Actualización Exitosa!',
+                    'Solicitud y servicios actualizados con éxito.'
+                  );
                   setTimeout(() => this.router.navigate(['/solicitudes']), 1500);
+                } else {
+                  this.mostrarAlerta(
+                    'error',
+                    'Error Parcial',
+                    errorMessage || 'Ocurrió un error al actualizar uno o más servicios.'
+                  );
                 }
               }
             })
@@ -393,12 +448,16 @@ export class SolicitudFormPageComponent implements OnInit {
             error: (err: any) => {
               console.error('Error in service operation:', err);
               hasError = true;
-              this.mostrarMensajeError('Error al actualizar uno o más servicios.');
+              errorMessage = err.error?.details || err.error?.message || 'Error desconocido al actualizar un servicio.';
             },
           });
       });
     } else {
-      this.mostrarMensajeExito('Solicitud actualizada con éxito (sin cambios en servicios).');
+      this.mostrarAlerta(
+        'success',
+        'Actualización Completada',
+        'Solicitud actualizada con éxito (sin cambios en servicios).'
+      );
       this.cargando = false;
       setTimeout(() => this.router.navigate(['/solicitudes']), 1500);
     }
@@ -408,19 +467,42 @@ export class SolicitudFormPageComponent implements OnInit {
     this.router.navigate(['/solicitudes']);
   }
 
-  private mostrarMensajeError(mensaje: string): void {
-    this.mensajeExito = null;
-    this.mensajeError = mensaje;
+  /**
+   * Muestra una alerta usando SweetAlert2.
+   * @param icon Tipo de ícono ('success', 'error', 'warning', 'info', 'question').
+   * @param title Título de la alerta.
+   * @param text Contenido del mensaje.
+   */
+  private mostrarAlerta(icon: 'success' | 'error' | 'warning' | 'info' | 'question', title: string, text: string): void {
+    Swal.fire({
+      icon: icon,
+      title: title,
+      text: text,
+      confirmButtonText: 'Aceptar'
+    });
   }
 
-  private mostrarMensajeExito(mensaje: string): void {
-    this.mensajeError = null;
-    this.mensajeExito = mensaje;
-  }
-
-  private mostrarMensajeConfirmacion(mensaje: string, onConfirm: () => void): void {
-    if (confirm(mensaje)) {
-      onConfirm();
-    }
+  /**
+   * Muestra una confirmación usando SweetAlert2.
+   * @param title Título de la confirmación.
+   * @param text Contenido del mensaje.
+   * @param icon Tipo de ícono ('success', 'error', 'warning', 'info', 'question').
+   * @param onConfirm Callback a ejecutar si el usuario confirma.
+   */
+  private mostrarConfirmacion(title: string, text: string, icon: 'warning' | 'info' | 'question', onConfirm: () => void): void {
+    Swal.fire({
+      title: title,
+      text: text,
+      icon: icon,
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Sí, estoy seguro',
+      cancelButtonText: 'No, cancelar'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        onConfirm();
+      }
+    });
   }
 }
