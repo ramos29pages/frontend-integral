@@ -1,6 +1,6 @@
 <div class="p-4 max-w-4xl mx-auto">
   <h1 class="text-xl font-bold mb-4">
-    {{ editando ? 'Editar Solicitud' : 'Nueva Solicitud' }}
+    Editar Solicitud
   </h1>
 
   <div *ngIf="mensajeError" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
@@ -14,13 +14,22 @@
     <span class="block sm:inline">{{ mensajeExito }}</span>
   </div>
 
+  <!-- Indicador visual del estado de edición -->
+  <div *ngIf="!canUpdateSolicitud" class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mb-4">
+    <strong class="font-bold">⚠️ Modo Solo Lectura:</strong>
+    <span class="block sm:inline">Esta solicitud no se puede editar porque no tiene servicios pendientes.</span>
+  </div>
+
   <form [formGroup]="solicitudForm" (ngSubmit)="guardar()" class="bg-white p-6 rounded shadow space-y-4">
     <h2 class="text-lg font-semibold mb-2">Datos de la Solicitud</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label class="block font-medium text-gray-700">Cliente</label>
         <input formControlName="cliente" type="text" class="w-full p-2 border rounded"
-          [ngClass]="{ 'border-red-500': f['cliente'].invalid && f['cliente'].touched }" />
+          [ngClass]="{
+            'border-red-500': f['cliente'].invalid && f['cliente'].touched,
+            'bg-gray-100': !canUpdateSolicitud
+          }" />
         <div *ngIf="f['cliente'].invalid && f['cliente'].touched" class="text-red-500 text-sm">
           El cliente es obligatorio y debe tener menos de 100 caracteres.
         </div>
@@ -29,7 +38,10 @@
       <div>
         <label class="block font-medium text-gray-700">Email Cliente</label>
         <input formControlName="email_cliente" type="email" class="w-full p-2 border rounded"
-          [ngClass]="{ 'border-red-500': f['email_cliente'].invalid && f['email_cliente'].touched }" />
+          [ngClass]="{
+            'border-red-500': f['email_cliente'].invalid && f['email_cliente'].touched,
+            'bg-gray-100': !canUpdateSolicitud
+          }" />
         <div *ngIf="f['email_cliente'].invalid && f['email_cliente'].touched" class="text-red-500 text-sm">
           Ingrese un email válido.
         </div>
@@ -39,7 +51,10 @@
     <div class="mt-4">
       <label class="block font-medium text-gray-700">Observaciones</label>
       <textarea formControlName="observaciones" rows="4" class="w-full p-2 border rounded"
-        [ngClass]="{ 'border-red-500': f['observaciones'].invalid && f['observaciones'].touched }"></textarea>
+        [ngClass]="{
+          'border-red-500': f['observaciones'].invalid && f['observaciones'].touched,
+          'bg-gray-100': !canUpdateSolicitud
+        }"></textarea>
       <div *ngIf="f['observaciones'].invalid && f['observaciones'].touched" class="text-red-500 text-sm">
         Las observaciones no pueden exceder los 500 caracteres.
       </div>
@@ -47,25 +62,48 @@
 
     <div class="mt-4">
       <label class="block font-medium text-gray-700">Estado de la Solicitud</label>
-      <select formControlName="estado" class="w-full p-2 border rounded">
+      <select formControlName="estado" class="w-full p-2 border rounded"
+        [ngClass]="{ 'bg-gray-100': !canUpdateSolicitud }">
         <option *ngFor="let estado of estadosSolicitud" [value]="estado">{{ estado }}</option>
       </select>
     </div>
 
     <hr class="my-6 border-gray-300" />
 
-    <h2 class="text-lg font-semibold mb-4">Servicios Solicitados</h2>
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-semibold">Servicios Solicitados</h2>
+      <!-- Solo mostrar botón agregar si se puede modificar -->
+      <button type="button" (click)="agregarServicio()"
+        *ngIf="canModifyServices"
+        class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
+        + Agregar Servicio
+      </button>
+    </div>
+
     <div formArrayName="servicios" class="space-y-4">
       <div *ngFor="let servicioControl of servicios.controls; let i = index" [formGroupName]="i"
-        class="bg-gray-50 p-4 rounded-md border border-gray-200">
-        <h3 class="font-bold text-md mb-3">Servicio #{{ i + 1 }}</h3>
+        class="bg-gray-50 p-4 rounded-md border border-gray-200"
+        [ngClass]="{ 'bg-gray-200': !canUpdateSolicitud }">
+
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-bold text-md">Servicio #{{ i + 1 }}</h3>
+          <!-- Solo mostrar botón eliminar si se puede modificar y hay más de un servicio -->
+          <button type="button" (click)="eliminarServicio(i)"
+            *ngIf="canModifyServices && servicios.length > 1"
+            class="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-3 rounded text-sm">
+            🗑️ Eliminar
+          </button>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block font-medium text-gray-700">Nombre del Servicio</label>
             <input formControlName="nombre_servicio" type="text" class="w-full p-2 border rounded"
-              [ngClass]="{ 'border-red-500': servicioControl.get('nombre_servicio')?.invalid && servicioControl.get('nombre_servicio')?.touched }" />
-            <div
-              *ngIf="servicioControl.get('nombre_servicio')?.invalid && servicioControl.get('nombre_servicio')?.touched"
+              [ngClass]="{
+                'border-red-500': servicioControl.get('nombre_servicio')?.invalid && servicioControl.get('nombre_servicio')?.touched,
+                'bg-gray-100': !canUpdateSolicitud
+              }" />
+            <div *ngIf="servicioControl.get('nombre_servicio')?.invalid && servicioControl.get('nombre_servicio')?.touched"
               class="text-red-500 text-sm">
               El nombre del servicio es requerido.
             </div>
@@ -74,44 +112,44 @@
           <div>
             <label class="block font-medium text-gray-700">Fecha de Reunión</label>
             <input formControlName="fecha_reunion" type="date" class="w-full p-2 border rounded"
-              [ngClass]="{ 'border-red-500': servicioControl.get('fecha_reunion')?.invalid && servicioControl.get('fecha_reunion')?.touched }" />
+              [ngClass]="{
+                'border-red-500': servicioControl.get('fecha_reunion')?.invalid && servicioControl.get('fecha_reunion')?.touched,
+                'bg-gray-100': !canUpdateSolicitud
+              }" />
             <div *ngIf="servicioControl.get('fecha_reunion')?.invalid && servicioControl.get('fecha_reunion')?.touched"
               class="text-red-500 text-sm">
-              <span *ngIf="servicioControl.get('fecha_reunion')?.errors?.['required']">La fecha de reunión es
-                requerida.</span>
-              <span *ngIf="servicioControl.get('fecha_reunion')?.errors?.['fechaPasada']">La fecha de reunión debe ser
-                futura.</span>
+              <span *ngIf="servicioControl.get('fecha_reunion')?.errors?.['required']">La fecha de reunión es requerida.</span>
+              <span *ngIf="servicioControl.get('fecha_reunion')?.errors?.['fechaPasada']">La fecha de reunión debe ser futura.</span>
             </div>
           </div>
 
           <div>
             <label class="block font-medium text-gray-700">Comentarios</label>
-            <textarea formControlName="comentarios" rows="2" class="w-full p-2 border rounded"></textarea>
+            <textarea formControlName="comentarios" rows="2" class="w-full p-2 border rounded"
+              [ngClass]="{ 'bg-gray-100': !canUpdateSolicitud }"></textarea>
           </div>
 
           <div>
             <label class="block font-medium text-gray-700">Costo Estimado</label>
-            <input formControlName="costo_estimado" type="number" class="w-full p-2 border rounded" />
+            <input formControlName="costo_estimado" type="number" class="w-full p-2 border rounded"
+              [ngClass]="{ 'bg-gray-100': !canUpdateSolicitud }" />
           </div>
 
           <div>
             <label class="block font-medium text-gray-700">Estado del Servicio</label>
-            <select formControlName="estado_servicio" class="w-full p-2 border rounded">
+            <select formControlName="estado_servicio" class="w-full p-2 border rounded"
+              [ngClass]="{ 'bg-gray-100': !canUpdateSolicitud }">
               <option *ngFor="let estado of estadosServicio" [value]="estado">{{ estado }}</option>
             </select>
           </div>
         </div>
-        <button type="button" (click)="eliminarServicio(i)"
-          class="mt-4 bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-          Eliminar Servicio
-        </button>
       </div>
     </div>
 
-    <button type="button" (click)="agregarServicio()"
-      class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded mb-6">
-      Agregar Servicio
-    </button>
+    <!-- Mensaje si no hay servicios o están vacíos -->
+    <div *ngIf="servicios.length === 0" class="text-center py-8 text-gray-500">
+      No hay servicios cargados...
+    </div>
 
     <div *ngIf="servicios.invalid && servicios.touched && servicios.errors?.['minlength']"
       class="text-red-500 text-sm mb-4">
@@ -119,12 +157,29 @@
     </div>
 
     <div class="flex justify-end gap-2 pt-4">
-      <button type="button" (click)="cancelar()" class="bg-gray-300 px-4 py-2 rounded">Cancelar</button>
-      <button type="submit" [disabled]="cargando || solicitudForm.invalid"
-        class="bg-blue-600 text-white px-4 py-2 rounded"
-        [ngClass]="{'opacity-50 cursor-not-allowed': cargando || solicitudForm.invalid}">
-        {{ cargando ? 'Guardando...' : (editando ? 'Actualizar Solicitud' : 'Crear Solicitud') }}
+      <button type="button" (click)="cancelar()" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">
+        Cancelar
+      </button>
+      <button type="submit"
+        [disabled]="cargando || solicitudForm.invalid || canUpdateSolicitud == false"
+        class="px-4 py-2 rounded text-white"
+        [ngClass]="{
+          'bg-blue-600 hover:bg-blue-700': canUpdateSolicitud && !cargando && solicitudForm.valid,
+          'bg-gray-400 cursor-not-allowed': !canUpdateSolicitud || cargando || solicitudForm.invalid
+        }">
+        <span *ngIf="cargando">🔄 Guardando...</span>
+        <span *ngIf="!cargando && canUpdateSolicitud">✏️ Actualizar Solicitud</span>
+        <span *ngIf="!cargando && !canUpdateSolicitud">🔒 No Editable</span>
       </button>
     </div>
   </form>
+
+  <!-- Debug info (remove in production) -->
+  <div class="mt-4 p-4 bg-gray-100 rounded text-sm" *ngIf="false">
+    <strong>Debug Info:</strong><br>
+    canUpdateSolicitud: {{ canUpdateSolicitud }}<br>
+    canModifyServices: {{ canModifyServices }}<br>
+    servicios.length: {{ servicios.length }}<br>
+    cargando: {{ cargando }}
+  </div>
 </div>

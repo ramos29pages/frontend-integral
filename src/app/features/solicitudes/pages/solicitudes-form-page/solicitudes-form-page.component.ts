@@ -9,27 +9,34 @@ import {
 import { ActivatedRoute, Router } from '@angular/router';
 import { SolicitudService } from '../../../../core/services/solicitud.service';
 import { Solicitud } from '../../../../core/models/solicitud.model';
-import { Servicio } from '../../../../core/models/servicio.model'; // Corrected: Import 'Servicio' model
-import { CommonModule } from '@angular/common'; // Necessary for *ngIf, *ngFor
-import { ReactiveFormsModule } from '@angular/forms'; // Necessary for reactive forms
+import { Servicio } from '../../../../core/models/servicio.model';
+import { CommonModule } from '@angular/common';
+import { ReactiveFormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
+import { tap, finalize } from 'rxjs/operators';
 
 @Component({
   selector: 'app-solicitud-form-page',
   templateUrl: './solicitudes-form-page.component.html',
-  standalone: true, // Mark as standalone if not in a module
-  imports: [CommonModule, ReactiveFormsModule], // Import necessary modules
+  standalone: true,
+  imports: [CommonModule, ReactiveFormsModule],
 })
 export class SolicitudFormPageComponent implements OnInit {
-  solicitudForm!: FormGroup; // Renamed from 'form' to 'solicitudForm' for clarity
+  solicitudForm!: FormGroup;
   cargando = false;
-  editando = false;
+  editando = false; // SOLO MODO EDICIÓN
   solicitudId!: number;
-  estadosSolicitud = ['Abierta', 'En Proceso', 'Cerrada', 'Cancelada']; // Request States
-  estadosServicio = ['Pendiente', 'Aprobado', 'Rechazado', 'Vencido']; // Service States
+  estadosSolicitud = ['Abierta', 'En Proceso', 'Cerrada', 'Cancelada'];
+  estadosServicio = ['Pendiente', 'Aprobado', 'Rechazado', 'Vencido'];
 
-  mensajeError: string | null = null; // To display error messages in the UI
-  mensajeExito: string | null = null; // To display success messages in the UI
+  mensajeError: string | null = null;
+  mensajeExito: string | null = null;
+
+  // Control de actualización basado en lógica de negocio
+  canUpdateSolicitud: boolean = false;
+
+  // Nuevo: Control para mostrar/ocultar botones de agregar/eliminar servicios
+  canModifyServices: boolean = false;
 
   constructor(
     private fb: FormBuilder,
@@ -43,21 +50,21 @@ export class SolicitudFormPageComponent implements OnInit {
 
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
+      // SOLO MODO EDICIÓN
       this.editando = true;
       this.solicitudId = +id;
       this.cargarSolicitud();
     } else {
-      // If it's a new request, add a default service (mandatory)
-      this.agregarServicio();
+      // REDIRIGIR si no hay ID - solo permitimos edición
+      this.mostrarMensajeError('Esta página solo permite editar solicitudes existentes.');
+      setTimeout(() => this.router.navigate(['/solicitudes']), 2000);
     }
   }
 
-  // Getter to easily access form controls
   get f() {
     return this.solicitudForm.controls;
   }
 
-  // Getter for the services FormArray
   get servicios(): FormArray {
     return this.solicitudForm.get('servicios') as FormArray;
   }
@@ -66,19 +73,17 @@ export class SolicitudFormPageComponent implements OnInit {
     this.solicitudForm = this.fb.group({
       cliente: ['', [Validators.required, Validators.maxLength(100)]],
       email_cliente: ['', [Validators.required, Validators.email]],
-      observaciones: ['', Validators.maxLength(500)], // Corrected to 'observaciones'
-      estado: ['Abierta', Validators.required], // Main request status
-      servicios: this.fb.array([], Validators.minLength(1)), // FormArray for services
+      observaciones: ['', Validators.maxLength(500)],
+      estado: ['Abierta', Validators.required],
+      servicios: this.fb.array([], Validators.minLength(1)),
     });
   }
 
-  // Method to create a FormGroup for a new service
   private crearServicioFormGroup(servicio?: Servicio): FormGroup {
     const today = new Date();
     today.setDate(today.getDate() + 1);
     const tomorrow = today.toISOString().split('T')[0];
 
-    // Validar fecha de servicio
     let fechaValida = servicio?.fecha_reunion || tomorrow;
     if (servicio?.fecha_reunion) {
       const fechaISO = new Date(servicio.fecha_reunion);
@@ -98,60 +103,79 @@ export class SolicitudFormPageComponent implements OnInit {
         servicio?.estado_servicio || 'Pendiente',
         Validators.required,
       ],
-      comentarios: [servicio?.comentarios || '']
+      comentarios: [servicio?.comentarios || ''],
+      // AGREGAR el campo costo_estimado que falta
+      costo_estimado: [servicio?.costo_estimado || 0, [Validators.min(0)]]
     });
   }
 
   agregarServicio(servicio?: Servicio): void {
-    this.servicios.push(this.crearServicioFormGroup(servicio));
+    // Solo permitir agregar servicios si se puede modificar
+    if (!this.canModifyServices) {
+      this.mostrarMensajeError('No se pueden agregar servicios. La solicitud no tiene servicios pendientes.');
+      return;
+    }
+
+    const newServiceControl = this.crearServicioFormGroup(servicio);
+    this.servicios.push(newServiceControl);
+
+    // Solo actualizar estado si no estamos cargando
+    if (!this.cargando) {
+      this.actualizarEstadoFormulario();
+    }
   }
 
   eliminarServicio(index: number): void {
+    // Solo permitir eliminar servicios si se puede modificar
+    if (!this.canModifyServices) {
+      this.mostrarMensajeError('No se pueden eliminar servicios. La solicitud no tiene servicios pendientes.');
+      return;
+    }
+
     const servicioControl = this.servicios.at(index);
     const servicioId = servicioControl.get('id_servicio')?.value;
 
-    if (this.editando && servicioId) {
-      // If we are editing and the service already exists in the DB, confirm deletion
+    if (servicioId) {
       this.mostrarMensajeConfirmacion(
         '¿Estás seguro de que deseas eliminar este servicio?',
         () => {
           this.cargando = true;
-          this.solicitudService.deleteService(servicioId).subscribe({
-            next: () => {
-              this.servicios.removeAt(index);
-              this.mostrarMensajeExito('Servicio eliminado con éxito.');
-              this.cargando = false;
-              this.actualizarEstadoFormularioPrincipal(); // Recalculate if the request can be edited
-            },
-            error: (err: any) => {
-              console.error('Error al eliminar servicio:', err);
-              this.mostrarMensajeError('Error al eliminar el servicio.');
-              this.cargando = false;
-            },
-          });
+          this.solicitudService
+            .deleteService(servicioId)
+            .pipe(
+              finalize(() => {
+                this.cargando = false;
+                this.actualizarEstadoFormulario();
+              })
+            )
+            .subscribe({
+              next: () => {
+                this.servicios.removeAt(index);
+                this.mostrarMensajeExito('Servicio eliminado con éxito.');
+              },
+              error: (err: any) => {
+                console.error('Error al eliminar servicio:', err);
+                this.mostrarMensajeError('Error al eliminar el servicio.');
+              },
+            });
         }
       );
     } else {
-      // If it's a new service (not yet saved) or we are not editing, simply remove it from the FormArray
       if (this.servicios.length > 1) {
-        // Do not allow deletion if it's the only service and it's mandatory
         this.servicios.removeAt(index);
+        this.actualizarEstadoFormulario();
       } else {
-        this.mostrarMensajeError(
-          'Una solicitud debe tener al menos un servicio.'
-        );
+        this.mostrarMensajeError('Una solicitud debe tener al menos un servicio.');
       }
     }
   }
 
-  futuraFechaValidator(
-    control: AbstractControl
-  ): { [key: string]: any } | null {
-    if (!control.value) return null; // Do not validate if empty, Validators.required will handle it
+  futuraFechaValidator(control: AbstractControl): { [key: string]: any } | null {
+    if (!control.value) return null;
 
     const selectedDate = new Date(control.value);
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize to start of day for comparison
+    today.setHours(0, 0, 0, 0);
 
     return selectedDate > today
       ? null
@@ -160,193 +184,221 @@ export class SolicitudFormPageComponent implements OnInit {
 
   cargarSolicitud(): void {
     this.cargando = true;
-    this.solicitudService.getSolicitudById(this.solicitudId).subscribe({
-      next: (solicitud: Solicitud) => {
-        this.solicitudForm.patchValue({
-          cliente: solicitud.cliente,
-          email_cliente: solicitud.email_cliente,
-          observaciones: solicitud.observaciones,
-          estado: solicitud.estado,
-        });
+    this.solicitudService
+      .getSolicitudById(this.solicitudId)
+      .pipe(
+        finalize(() => (this.cargando = false))
+      )
+      .subscribe({
+        next: (solicitud: Solicitud) => {
+          console.log('Solicitud cargada:', solicitud);
 
-        // Formatear fechas de servicios antes de agregarlos
-        if (solicitud.servicios) {
-          solicitud.servicios.forEach((servicio) => {
-            // Convertir fecha al formato YYYY-MM-DD si es necesario
-            const fechaISO = new Date(servicio.fecha_reunion);
-            if (!isNaN(fechaISO.getTime())) {
-              servicio.fecha_reunion = fechaISO.toISOString().split('T')[0];
-            }
-            this.agregarServicio(servicio);
+          // Limpiar servicios antes de cargar
+          this.servicios.clear();
+
+          // Cargar datos principales
+          this.solicitudForm.patchValue({
+            cliente: solicitud.cliente,
+            email_cliente: solicitud.email_cliente,
+            observaciones: solicitud.observaciones,
+            estado: solicitud.estado,
           });
-        }
 
-        this.actualizarEstadoFormularioPrincipal();
-        this.cargando = false;
-      },
-      error: (err: any) => {
-        console.error('Error al cargar la solicitud:', err);
-        this.cargando = false;
-        this.mostrarMensajeError(
-          'Error al cargar la solicitud. Redirigiendo...'
-        );
-        setTimeout(() => this.router.navigate(['/solicitudes']), 2000);
-      },
-    });
+          // Cargar servicios
+          if (solicitud.servicios && solicitud.servicios.length > 0) {
+            console.log('Servicios a cargar:', solicitud.servicios);
+
+            solicitud.servicios.forEach((servicio, index) => {
+              console.log(`Cargando servicio ${index}:`, servicio);
+
+              // Convertir fecha
+              let fechaValida = servicio.fecha_reunion;
+              if (servicio.fecha_reunion) {
+                try {
+                  const fechaISO = new Date(servicio.fecha_reunion);
+                  if (!isNaN(fechaISO.getTime())) {
+                    fechaValida = fechaISO.toISOString().split('T')[0];
+                  }
+                } catch (error) {
+                  console.error('Error procesando fecha:', error);
+                }
+              }
+
+              // Crear FormGroup directamente
+              const servicioFormGroup = this.crearServicioFormGroup({
+                ...servicio,
+                fecha_reunion: fechaValida
+              });
+
+              this.servicios.push(servicioFormGroup);
+            });
+
+            console.log('FormArray servicios después de cargar:', this.servicios.controls);
+          } else {
+            console.log('No hay servicios para cargar');
+          }
+
+          // IMPORTANTE: Aplicar lógica de negocio después de cargar todo
+          this.actualizarEstadoFormulario();
+        },
+        error: (err: any) => {
+          console.error('Error al cargar la solicitud:', err);
+          this.mostrarMensajeError('Error al cargar la solicitud. Redirigiendo...');
+          setTimeout(() => this.router.navigate(['/solicitudes']), 2000);
+        },
+      });
   }
 
-  // Business rule: A request can only be modified if it has at least one service in "Pendiente" status
-  actualizarEstadoFormularioPrincipal(): void {
+  actualizarEstadoFormulario(): void {
+    console.log('=== Actualizando estado del formulario ===');
+    console.log('Número de servicios:', this.servicios.length);
+
     const tieneServiciosPendientes = this.servicios.controls.some(
-      (control: AbstractControl) =>
-        control.get('estado_servicio')?.value === 'Pendiente'
+      (control: AbstractControl) => {
+        const estado = control.get('estado_servicio')?.value;
+        console.log('Estado del servicio:', estado);
+        return estado === 'Pendiente';
+      }
     );
 
-    if (this.editando && !tieneServiciosPendientes) {
-      this.solicitudForm.get('cliente')?.disable();
-      this.solicitudForm.get('email_cliente')?.disable();
-      this.solicitudForm.get('observaciones')?.disable();
-      this.solicitudForm.get('estado')?.disable(); // Also the main request status
+    console.log('¿Tiene servicios pendientes?:', tieneServiciosPendientes);
+
+    if (!tieneServiciosPendientes) {
+      // SIN SERVICIOS PENDIENTES - DESHABILITAR TODO
+      console.log('🔒 DESHABILITANDO - No hay servicios pendientes');
+
+      // Deshabilitar campos principales
+      this.solicitudForm.get('cliente')?.disable({ emitEvent: false });
+      this.solicitudForm.get('email_cliente')?.disable({ emitEvent: false });
+      this.solicitudForm.get('observaciones')?.disable({ emitEvent: false });
+      this.solicitudForm.get('estado')?.disable({ emitEvent: false });
+
+      // Deshabilitar todos los servicios
+      this.servicios.controls.forEach((serviceControl) => {
+        serviceControl.disable({ emitEvent: false });
+      });
+
+      // Controles de estado
+      this.canUpdateSolicitud = false;
+      this.canModifyServices = false;
+
       this.mostrarMensajeError(
         'Esta solicitud no puede ser modificada porque no tiene servicios en estado "Pendiente".'
       );
     } else {
-      this.solicitudForm.get('cliente')?.enable();
-      this.solicitudForm.get('email_cliente')?.enable();
-      this.solicitudForm.get('observaciones')?.enable();
-      this.solicitudForm.get('estado')?.enable();
-      this.mensajeError = null; // Clear message if enabled
+      // CON SERVICIOS PENDIENTES - HABILITAR TODO
+      console.log('🔓 HABILITANDO - Hay servicios pendientes');
+
+      // Habilitar campos principales
+      this.solicitudForm.get('cliente')?.enable({ emitEvent: false });
+      this.solicitudForm.get('email_cliente')?.enable({ emitEvent: false });
+      this.solicitudForm.get('observaciones')?.enable({ emitEvent: false });
+      this.solicitudForm.get('estado')?.enable({ emitEvent: false });
+
+      // Habilitar todos los servicios
+      this.servicios.controls.forEach((serviceControl) => {
+        serviceControl.enable({ emitEvent: false });
+      });
+
+      // Controles de estado
+      this.canUpdateSolicitud = true;
+      this.canModifyServices = true;
+
+      this.mensajeError = null; // Limpiar mensaje de error
     }
+
+    console.log('canUpdateSolicitud:', this.canUpdateSolicitud);
+    console.log('canModifyServices:', this.canModifyServices);
+    console.log('=== Fin actualización estado ===');
   }
 
   guardar(): void {
     this.mensajeError = null;
     this.mensajeExito = null;
 
+    // Verificar lógica de negocio ANTES de validar formulario
+    if (!this.canUpdateSolicitud) {
+      this.mostrarMensajeError(
+        'No se puede actualizar la solicitud porque no tiene servicios en estado "Pendiente".'
+      );
+      return;
+    }
+
+    // Validar formulario
     if (this.solicitudForm.invalid) {
       this.solicitudForm.markAllAsTouched();
-      this.mostrarMensajeError(
-        'Por favor, corrige los errores del formulario.'
-      );
+      this.mostrarMensajeError('Por favor, corrige los errores del formulario.');
       return;
     }
 
     this.cargando = true;
 
-    if (this.editando) {
-      // Update the main request
-      const solicitudUpdatePayload = {
-        cliente: this.solicitudForm.value.cliente,
-        email_cliente: this.solicitudForm.value.email_cliente,
-        observaciones: this.solicitudForm.value.observaciones,
-        estado: this.solicitudForm.value.estado, // Allows updating the main status
-      };
+    // SOLO ACTUALIZACIÓN (no creación)
+    const solicitudUpdatePayload = this.solicitudForm.getRawValue();
 
-      this.solicitudService
-        .updateSolicitud(this.solicitudId, solicitudUpdatePayload)
-        .subscribe({
-          next: () => {
-            // After updating the main request, update/create/delete services
-            this.manejarActualizacionServicios();
-          },
-          error: (err: any) => {
-            console.error('Error al actualizar la solicitud principal:', err);
-            this.mostrarMensajeError(
-              'Error al actualizar la solicitud principal.'
-            );
-            this.cargando = false;
-          },
-        });
-    } else {
-      // Create new request with nested services
-      const nuevaSolicitud: Solicitud = {
-        id: 0, // ID is auto-incremented in the backend
-        cliente: this.solicitudForm.value.cliente,
-        email_cliente: this.solicitudForm.value.email_cliente,
-        fecha_solicitud: '', // Generated in the backend
-        estado: 'Abierta', // Initial status
-        observaciones: this.solicitudForm.value.observaciones,
-        fecha_ultima_modificacion: '', // Generated in the backend
-        servicios: this.solicitudForm.value.servicios.map((s: any) => ({
-          nombre_servicio: s.nombre_servicio,
-          fecha_reunion: s.fecha_reunion,
-          comentarios: s.comentarios
-        })),
-      };
-
-      this.solicitudService.createSolicitud(nuevaSolicitud).subscribe({
+    this.solicitudService
+      .updateSolicitud(this.solicitudId, solicitudUpdatePayload)
+      .pipe(
+        finalize(() => (this.cargando = false))
+      )
+      .subscribe({
         next: () => {
-          this.mostrarMensajeExito('Solicitud creada con éxito.');
-          this.cargando = false;
-          setTimeout(() => this.router.navigate(['/solicitudes']), 1500);
+          this.manejarActualizacionServicios();
         },
         error: (err: any) => {
-          console.error('Error al crear la solicitud:', err);
-          this.mostrarMensajeError('Error al crear la solicitud.');
-          this.cargando = false;
+          console.error('Error al actualizar la solicitud principal:', err);
+          this.mostrarMensajeError('Error al actualizar la solicitud principal.');
         },
       });
-    }
   }
 
   private manejarActualizacionServicios(): void {
-    const serviciosActualizados: Servicio[] =
-      this.solicitudForm.value.servicios;
+    const serviciosActualizados: Servicio[] = this.solicitudForm.getRawValue().servicios;
     const observables: Observable<any>[] = [];
 
     serviciosActualizados.forEach((servicio) => {
       if (servicio.id_servicio) {
-        // If the service already has an ID, it's an update
         observables.push(
           this.solicitudService.updateService(servicio.id_servicio, servicio)
         );
       } else {
-        // If it doesn't have an ID, it's a new service that must be added to the existing request
         if (this.solicitudId) {
           observables.push(
-            this.solicitudService.addServiceToSolicitud(
-              this.solicitudId,
-              servicio
-            )
+            this.solicitudService.addServiceToSolicitud(this.solicitudId, servicio)
           );
         }
       }
     });
 
-    // Execute all service operations in parallel
     if (observables.length > 0) {
-      // Use forkJoin to wait for all service operations to complete
-      // or simply subscribe to each one if order doesn't matter and one error shouldn't stop others.
-      // For simplicity, here we subscribe to each one.
       let completedOperations = 0;
       let hasError = false;
 
       observables.forEach((obs) => {
-        obs.subscribe({
-          next: () => {
-            completedOperations++;
-            if (completedOperations === observables.length && !hasError) {
-              this.mostrarMensajeExito(
-                'Solicitud y servicios actualizados con éxito.'
-              );
-              this.cargando = false;
-              setTimeout(() => this.router.navigate(['/solicitudes']), 1500);
-            }
-          },
-          error: (err: any) => {
-            console.error('Error in service operation:', err);
-            hasError = true;
-            this.mostrarMensajeError(
-              'Error al actualizar uno o más servicios.'
-            );
-            this.cargando = false;
-          },
-        });
+        obs
+          .pipe(
+            finalize(() => {
+              completedOperations++;
+              if (completedOperations === observables.length) {
+                this.cargando = false;
+                if (!hasError) {
+                  this.mostrarMensajeExito('Solicitud y servicios actualizados con éxito.');
+                  setTimeout(() => this.router.navigate(['/solicitudes']), 1500);
+                }
+              }
+            })
+          )
+          .subscribe({
+            next: () => {},
+            error: (err: any) => {
+              console.error('Error in service operation:', err);
+              hasError = true;
+              this.mostrarMensajeError('Error al actualizar uno o más servicios.');
+            },
+          });
       });
     } else {
-      this.mostrarMensajeExito(
-        'Solicitud actualizada con éxito (sin cambios en servicios).'
-      );
+      this.mostrarMensajeExito('Solicitud actualizada con éxito (sin cambios en servicios).');
       this.cargando = false;
       setTimeout(() => this.router.navigate(['/solicitudes']), 1500);
     }
@@ -356,7 +408,6 @@ export class SolicitudFormPageComponent implements OnInit {
     this.router.navigate(['/solicitudes']);
   }
 
-  // --- Methods to display messages in the UI ---
   private mostrarMensajeError(mensaje: string): void {
     this.mensajeExito = null;
     this.mensajeError = mensaje;
@@ -367,13 +418,7 @@ export class SolicitudFormPageComponent implements OnInit {
     this.mensajeExito = mensaje;
   }
 
-  private mostrarMensajeConfirmacion(
-    mensaje: string,
-    onConfirm: () => void
-  ): void {
-    // Implement a modal or confirmation component here
-    // For now, we will use a simple confirm() (although it was recommended to avoid it, for a quick MVP)
-    // In a real application, you would use a modal service.
+  private mostrarMensajeConfirmacion(mensaje: string, onConfirm: () => void): void {
     if (confirm(mensaje)) {
       onConfirm();
     }
