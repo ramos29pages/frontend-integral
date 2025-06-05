@@ -25,10 +25,10 @@ import { EstadoSolicitudPipe } from '../../../../shared/pipes/estado-solicitud.p
         </thead>
         <tbody class="divide-y divide-gray-200">
           <tr *ngFor="let solicitud of solicitudes" class="hover:bg-gray-50">
-            <td class="py-4 px-6 text-sm text-gray-900">{{ solicitud.idSolicitud }}</td>
+            <td class="py-4 px-6 text-sm text-gray-900">{{ solicitud.id }}</td>
             <td class="py-4 px-6 text-sm text-gray-900">{{ solicitud.cliente }}</td>
-            <td class="py-4 px-6 text-sm text-gray-900">{{ solicitud.emailCliente }}</td>
-            <td class="py-4 px-6 text-sm text-gray-900">{{ solicitud.fechaSolicitud | date:'shortDate' }}</td>
+            <td class="py-4 px-6 text-sm text-gray-900">{{ solicitud.email_cliente }}</td>
+            <td class="py-4 px-6 text-sm text-gray-900">{{ solicitud.fecha_solicitud | date:'shortDate' }}</td>
             <td class="py-4 px-6 text-sm text-gray-900">
               <span [ngClass]="{
                 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full': true,
@@ -43,21 +43,21 @@ import { EstadoSolicitudPipe } from '../../../../shared/pipes/estado-solicitud.p
             <td class="py-4 px-6 text-center text-sm font-medium">
               <div class="flex justify-center space-x-2">
                 <button
-                  [routerLink]="['/solicitudes', solicitud.idSolicitud]"
+                  [routerLink]="['/solicitudes', solicitud.id]"
                   class="text-blue-600 hover:text-blue-900 p-2 rounded-full hover:bg-gray-200"
                   title="Ver Detalle"
                 >
                   <fa-icon [icon]="faEye" size="lg"></fa-icon>
                 </button>
                 <button
-                  [routerLink]="['/solicitudes/edit', solicitud.idSolicitud]"
+                  [routerLink]="['/solicitudes/edit', solicitud.id]"
                   class="text-yellow-600 hover:text-yellow-900 p-2 rounded-full hover:bg-gray-200"
                   title="Editar Solicitud"
                 >
                   <fa-icon [icon]="faEdit" size="lg"></fa-icon>
                 </button>
                 <button
-                  (click)="deleteSolicitud.emit(solicitud.idSolicitud!)"
+                  (click)="deleteSolicitud.emit(solicitud.id!)"
                   class="text-red-600 hover:text-red-900 p-2 rounded-full hover:bg-gray-200"
                   title="Eliminar Solicitud"
                 >

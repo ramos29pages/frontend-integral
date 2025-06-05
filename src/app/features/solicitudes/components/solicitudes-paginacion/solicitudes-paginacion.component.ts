@@ -1,36 +1,41 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+// components/paginacion/paginacion.component.ts
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({
-  selector: 'app-solicitudes-paginacion',
+  selector: 'app-paginacion',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="join">
+    <div class="mt-4 flex justify-center items-center gap-2">
       <button
-        class="join-item btn btn-sm"
-        [disabled]="page <= 1"
-        (click)="onChange(page - 1)"
-      >
-        «
+        (click)="onCambiarPagina(paginaActual - 1)"
+        [disabled]="paginaActual === 1"
+        class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+        Anterior
       </button>
-      <button class="join-item btn btn-sm">Página {{ page }}</button>
+
+      <span class="px-3 py-1 text-gray-700">
+        Página {{ paginaActual }} de {{ totalPaginas }}
+      </span>
+
       <button
-        class="join-item btn btn-sm"
-        [disabled]="page >= totalPages"
-        (click)="onChange(page + 1)"
-      >
-        »
+        (click)="onCambiarPagina(paginaActual + 1)"
+        [disabled]="paginaActual === totalPaginas"
+        class="px-3 py-1 border rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">
+        Siguiente
       </button>
     </div>
   `
 })
-export class SolicitudesPaginacionComponent {
-  @Input() page = 1;
-  @Input() totalPages = 1;
-  @Output() pageChange = new EventEmitter<number>();
+export class PaginacionComponent {
+  @Input() paginaActual = 1;
+  @Input() totalPaginas = 1;
+  @Output() cambiarPagina = new EventEmitter<number>();
 
-  onChange(p: number) {
-    this.pageChange.emit(p);
+  onCambiarPagina(nuevaPagina: number): void {
+    if (nuevaPagina >= 1 && nuevaPagina <= this.totalPaginas) {
+      this.cambiarPagina.emit(nuevaPagina);
+    }
   }
 }

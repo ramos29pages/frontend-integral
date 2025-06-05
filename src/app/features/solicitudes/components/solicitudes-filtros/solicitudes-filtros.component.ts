@@ -1,43 +1,63 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+// components/filtros/filtros.component.ts
+import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 
 @Component({
-  selector: 'app-solicitudes-filtros',
+  selector: 'app-filtros',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
-    <div class="flex flex-wrap gap-2 items-center">
-      <input
-        type="text"
-        class="input input-sm input-bordered w-full md:w-auto"
-        placeholder="Buscar"
-        [value]="term"
-        (input)="onTermChange($any($event.target).value)"
-      />
-      <select
-        class="select select-sm select-bordered w-full md:w-auto"
-        [value]="estado"
-        (change)="onEstadoChange($any($event.target).value)"
-      >
-        <option value="">Todos</option>
-        <option value="pendiente">Pendiente</option>
-        <option value="aprobado">Aprobado</option>
-        <option value="rechazado">Rechazado</option>
-      </select>
+    <div class="bg-white p-4 rounded-lg shadow mb-4">
+      <h2 class="text-lg font-semibold mb-2">Filtros</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input
+          type="text"
+          placeholder="Cliente"
+          [(ngModel)]="filtrosLocal.cliente"
+          class="p-2 border rounded w-full focus:ring-2 focus:outline-none focus:ring-blue-300" />
+
+        <select
+          [(ngModel)]="filtrosLocal.estado"
+          class="p-2 border rounded w-full focus:ring-2 focus:outline-none focus:ring-blue-300">
+          <option value="">Todos los estados</option>
+          <option *ngFor="let estado of estados" [value]="estado">{{ estado }}</option>
+        </select>
+
+        <div class="flex gap-2">
+          <button
+            (click)="onAplicarFiltros()"
+            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex-1 flex items-center justify-center gap-2">
+            <i class="fas fa-search"></i> Buscar
+          </button>
+          <button
+            (click)="onLimpiarFiltros()"
+            class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-lg flex items-center justify-center gap-2">
+            <i class="fas fa-eraser"></i> Limpiar
+          </button>
+        </div>
+      </div>
     </div>
   `
 })
-export class SolicitudesFiltrosComponent {
-  @Input() term = '';
-  @Input() estado = '';
-  @Output() termChange = new EventEmitter<string>();
-  @Output() estadoChange = new EventEmitter<string>();
+export class FiltrosComponent implements OnInit {
+  @Input() estados: string[] = [];
+  @Input() filtros: any = { estado: '', cliente: '' };
+  @Output() aplicarFiltros = new EventEmitter<any>();
+  @Output() limpiarFiltros = new EventEmitter<void>();
 
-  onTermChange(value: string) {
-    this.termChange.emit(value);
+  filtrosLocal: any = { estado: '', cliente: '' };
+
+  ngOnInit(): void {
+    this.filtrosLocal = { ...this.filtros };
   }
 
-  onEstadoChange(value: string) {
-    this.estadoChange.emit(value);
+  onAplicarFiltros(): void {
+    this.aplicarFiltros.emit(this.filtrosLocal);
+  }
+
+  onLimpiarFiltros(): void {
+    this.filtrosLocal = { estado: '', cliente: '' };
+    this.limpiarFiltros.emit();
   }
 }
